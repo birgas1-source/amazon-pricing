@@ -13,52 +13,51 @@ export default async function handler(req, res) {
 
     const buffer = Buffer.from(file, 'base64')
     const wb = XLSX.read(buffer, { type: 'buffer' })
-    
-    const templateSheet = wb.Sheets['Template'] || wb.Sheets[wb.SheetNames[0]]
-    const rows = XLSX.utils.sheet_to_json(templateSheet, { header: 1, defval: '' })
+    const ws = wb.Sheets['Template']
+    if (!ws) return res.status(400).json({ error: 'No Template sheet found' })
 
-    // Find column indices
-    let asinCol = -1, priceCol = -1, skuCol = -1
-    for (let i = 0; i < 10; i++) {
-      const row = rows[i] || []
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+
+    // Find attribute row (row 5 = index 4)
+    let attrRowIdx = -1
+    let asinCol = -1
+    let priceCol = -1
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
       for (let j = 0; j < row.length; j++) {
-        const val = String(row[j]).toLowerCase()
-        if (val.includes('merchant_suggested_asin')) asinCol = j
+        const val = String(row[j] || '')
+        if (val.includes('merchant_suggested_asin')) { asinCol = j; attrRowIdx = i }
+        if (val.includes('purchasable_offer') && val.includes('our_price') && val.includes('value_with_tax')) priceCol = j
         if (val.includes('standard_price') && priceCol === -1) priceCol = j
-        if (val.includes('contribution_sku')) skuCol = j
       }
-      if (asinCol >= 0 && priceCol >= 0) break
+      if (attrRowIdx >= 0 && priceCol >= 0) break
     }
 
     const filledAsins = []
     const notInCatalog = []
+    const dataStart = attrRowIdx + 2 // skip example row
 
-    for (let i = 4; i < rows.length; i++) {
+    for (let i = dataStart; i < rows.length; i++) {
       const row = rows[i]
       if (!row || !row[asinCol]) continue
       const asin = String(row[asinCol]).trim()
       if (!asin.startsWith('B')) continue
 
       const pricing = products[asin]
-      if (!pricing) {
-        notInCatalog.push(asin)
-        continue
-      }
+      if (!pricing) { notInCatalog.push(asin); continue }
 
-      // Set price (use max as default)
       const price = pricing.max || pricing.min
       if (price && priceCol >= 0) {
         const cellAddr = XLSX.utils.encode_cell({ r: i, c: priceCol })
-        templateSheet[cellAddr] = { t: 'n', v: price }
+        ws[cellAddr] = { t: 'n', v: price }
         filledAsins.push(asin)
       }
     }
 
     const outBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsm' })
-    const outBase64 = outBuffer.toString('base64')
-
     res.status(200).json({
-      file: outBase64,
+      file: outBuffer.toString('base64'),
       filled_asins: filledAsins,
       not_in_catalog: notInCatalog,
     })
