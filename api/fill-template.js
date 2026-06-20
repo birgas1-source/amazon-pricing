@@ -18,13 +18,10 @@ export default async function handler(req, res) {
 
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
 
-    let attrRowIdx = -1
-    let asinCol = -1
-    let priceCol = -1
-    let minPriceCol = -1
-    let maxPriceCol = -1
-    let quantityCol = -1
-    let handlingCol = -1
+    let attrRowIdx = -1, asinCol = -1, priceCol = -1
+    let minPriceCol = -1, maxPriceCol = -1
+    let fulfillmentCol = -1, quantityCol = -1
+    let handlingCol = -1, conditionCol = -1
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
@@ -34,8 +31,10 @@ export default async function handler(req, res) {
         if (val.includes('our_price') && val.includes('value_with_tax')) priceCol = j
         if (val.includes('minimum_seller_allowed_price') && val.includes('value_with_tax')) minPriceCol = j
         if (val.includes('maximum_seller_allowed_price') && val.includes('value_with_tax')) maxPriceCol = j
+        if (val.includes('fulfillment_channel_code')) fulfillmentCol = j
         if (val.includes('fulfillment_availability') && val.includes('quantity')) quantityCol = j
-        if (val.includes('handling_time') && val.includes('value')) handlingCol = j
+        if (val.includes('lead_time_to_ship_max_days')) handlingCol = j
+        if (val.includes('condition_type')) conditionCol = j
       }
       if (attrRowIdx >= 0 && priceCol >= 0) break
     }
@@ -56,21 +55,20 @@ export default async function handler(req, res) {
       const maxPrice = pricing.max
       const minPrice = pricing.min
 
-      if (maxPrice && priceCol >= 0) {
+      if (maxPrice && priceCol >= 0)
         ws[XLSX.utils.encode_cell({ r: i, c: priceCol })] = { t: 'n', v: maxPrice }
-      }
-      if (minPrice && minPriceCol >= 0) {
+      if (minPrice && minPriceCol >= 0)
         ws[XLSX.utils.encode_cell({ r: i, c: minPriceCol })] = { t: 'n', v: minPrice }
-      }
-      if (maxPrice && maxPriceCol >= 0) {
+      if (maxPrice && maxPriceCol >= 0)
         ws[XLSX.utils.encode_cell({ r: i, c: maxPriceCol })] = { t: 'n', v: maxPrice }
-      }
-      if (quantityCol >= 0) {
+      if (fulfillmentCol >= 0)
+        ws[XLSX.utils.encode_cell({ r: i, c: fulfillmentCol })] = { t: 's', v: 'DEFAULT' }
+      if (quantityCol >= 0)
         ws[XLSX.utils.encode_cell({ r: i, c: quantityCol })] = { t: 'n', v: 1 }
-      }
-      if (handlingCol >= 0) {
+      if (handlingCol >= 0)
         ws[XLSX.utils.encode_cell({ r: i, c: handlingCol })] = { t: 'n', v: 5 }
-      }
+      if (conditionCol >= 0)
+        ws[XLSX.utils.encode_cell({ r: i, c: conditionCol })] = { t: 's', v: 'new_new' }
 
       filledAsins.push(asin)
     }
