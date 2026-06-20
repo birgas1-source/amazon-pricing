@@ -18,25 +18,28 @@ export default async function handler(req, res) {
 
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
 
-    // Find attribute row (row 5 = index 4)
+    // Find columns from attribute row (row 5 = index 4)
     let attrRowIdx = -1
     let asinCol = -1
     let priceCol = -1
+    let minPriceCol = -1
+    let maxPriceCol = -1
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
       for (let j = 0; j < row.length; j++) {
         const val = String(row[j] || '')
         if (val.includes('merchant_suggested_asin')) { asinCol = j; attrRowIdx = i }
-        if (val.includes('purchasable_offer') && val.includes('our_price') && val.includes('value_with_tax')) priceCol = j
-        if (val.includes('standard_price') && priceCol === -1) priceCol = j
+        if (val.includes('our_price') && val.includes('value_with_tax')) priceCol = j
+        if (val.includes('minimum_seller_allowed_price') && val.includes('value_with_tax')) minPriceCol = j
+        if (val.includes('maximum_seller_allowed_price') && val.includes('value_with_tax')) maxPriceCol = j
       }
       if (attrRowIdx >= 0 && priceCol >= 0) break
     }
 
     const filledAsins = []
     const notInCatalog = []
-    const dataStart = attrRowIdx + 2 // skip example row
+    const dataStart = attrRowIdx + 2
 
     for (let i = dataStart; i < rows.length; i++) {
       const row = rows[i]
@@ -47,12 +50,22 @@ export default async function handler(req, res) {
       const pricing = products[asin]
       if (!pricing) { notInCatalog.push(asin); continue }
 
-      const price = pricing.max || pricing.min
-      if (price && priceCol >= 0) {
+      const maxPrice = pricing.max
+      const minPrice = pricing.min
+
+      if (maxPrice && priceCol >= 0) {
         const cellAddr = XLSX.utils.encode_cell({ r: i, c: priceCol })
-        ws[cellAddr] = { t: 'n', v: price }
-        filledAsins.push(asin)
+        ws[cellAddr] = { t: 'n', v: maxPrice }
       }
+      if (minPrice && minPriceCol >= 0) {
+        const cellAddr = XLSX.utils.encode_cell({ r: i, c: minPriceCol })
+        ws[cellAddr] = { t: 'n', v: minPrice }
+      }
+      if (maxPrice && maxPriceCol >= 0) {
+        const cellAddr = XLSX.utils.encode_cell({ r: i, c: maxPriceCol })
+        ws[cellAddr] = { t: 'n', v: maxPrice }
+      }
+      filledAsins.push(asin)
     }
 
     const outBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsm' })
