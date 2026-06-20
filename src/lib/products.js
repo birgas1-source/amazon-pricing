@@ -614,3 +614,18 @@ export async function rejectProductsWithFriends() {
   }
   return count
 }
+export async function autoCalculatePrices(products, exchangeRate) {
+  const rows = []
+  for (const p of products) {
+    if (!p.shipping_egp || !p.price_aed) continue
+    const cost = Math.round(p.price_aed * exchangeRate + p.shipping_egp)
+    const maxPrice = Math.round(cost * 1.65)
+    const hasCompetitors = p.total_sellers > 0 && !p.is_our_listing
+    const minPrice = hasCompetitors ? Math.round(cost * 1.50) : maxPrice
+    rows.push({ asin: p.asin, min_price_egp: minPrice, max_price_egp: maxPrice })
+  }
+  if (!rows.length) return 0
+  const { error } = await supabase.from('product_pricing').upsert(rows, { onConflict: 'asin' })
+  if (error) throw error
+  return rows.length
+}
