@@ -32,7 +32,7 @@ export default async function handler(req, res) {
         if (val.includes('minimum_seller_allowed_price') && val.includes('value_with_tax')) minPriceCol = j
         if (val.includes('maximum_seller_allowed_price') && val.includes('value_with_tax')) maxPriceCol = j
         if (val.includes('fulfillment_channel_code')) fulfillmentCol = j
-        if (val.includes('fulfillment_availability') && val.includes('quantity')) quantityCol = j
+        if (val.includes('fulfillment_availability') && val.includes('quantity') && !val.includes('max')) quantityCol = j
         if (val.includes('lead_time_to_ship_max_days')) handlingCol = j
         if (val.includes('condition_type')) conditionCol = j
       }
